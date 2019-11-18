@@ -1,0 +1,79 @@
+This repository is currently an example of how jobs may be structured. It is
+not complete, and is currently very hacky (there is a lot of tidying up to be
+done).
+
+Theory and rational:
+
+This repository is for performing smoke tests of rook.io. The intention is for
+jobs to simulate various infrastructure environments and scenarios that may
+occur within. For example, verifying how rook.io might recover from a bad node
+in a cluster. Unit tests are not in scope for this repo.
+
+Because a job itself may need to perform actions on the infrastructure (eg,
+attaching new disks, simulating kernel panics etc), the job itself is
+responsible for creating, managing, and destroying the infrastructure.
+
+A job therefore is specific to a resource and not portable. This is because
+performing actions against a public cloud is significantly different to
+performing them against libvirt, for example. If you wanted to test a particular
+feature on both AWS and a localhost (libvirt), then the test would need to be
+written twice.
+
+Because of the duplication between jobs for each environment it is expected that
+where possible jobs share a common library of tasks. These are likely to be
+operations such as verifying the state of a cluster.
+
+A job may accept some input for tuning. For example, the expected kubernetes
+version could be passed in and used when setting up the infrastructure. Because
+of the significant differences, variables changing something like the kubernetes
+distribution would not be expected and instead would be a separate job.
+
+Another tenet of these jobs is that rook.io should not care about the
+underlying physical or virtual infrastructure. For example, a test that
+verifies node addition for libvirt should be sufficient to say that node
+addition would work in a public cloud (assuming the rest of the environment
+would otherwise be the same, such as base operating system, kubernetes version
+etc). Therefore, the primary reason to rewrite a test in this case would only
+be to suit the available resources the developer or community has.
+
+However, we may still want to verify different environments (thought of as
+separately from infrastructure). For example, different base operating systems,
+or distributions of kubernetes etc. For each item in this matrix a new job
+would be created.
+
+A job would generally consist of the following steps:
+ 1. Set up infrastructure:
+     - Boot nodes on a cloud or libvirt etc. with whichever operating system is
+       being evaluated. (This could be done with terraform, vagrant, bash etc).
+     - The number of nodes, configuration of networks, disks, and so forth
+       are specific to the job.
+ 2. Set up kubernetes:
+     - Install kubernetes as desired onto the configured nodes.
+     - Using whichever distribution that may be evaluated.
+ 3. Install rook:
+     - Using upstream or configured images etc.
+ 4. Perform the test:
+     - Check the state of the cluster,
+     - Simulate something changing,
+     - Verify the correct operations were performed.
+ 5. Destroy resources:
+     - Remove created resources.
+
+These steps should be in their own bash scripts. This is so that they can either
+be called in order manually, or as their own stage in a Jenkins pipeline.
+
+Folder structure:
+ common/
+   Common library/reusable scripts
+ common/libvirt
+   Common scripts for working against libvirt (launching nodes etc)
+ jobs/
+   Each job has its own folder within which contains separate scripts for each
+   step.
+
+A Job may want to run multiple tests. This is to take advantage of the
+environment that is set up. For example you may run node addition then hdd
+failure against the same deployment in sequence. After each test in a job the
+environment should be reset as close as possible to what the next test would
+expect. Test should be runnable out of order, or individually. For example,
+a job may do extra tests by having steps 4.a, 4.b, 4.c etc.
